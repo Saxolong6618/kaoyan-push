@@ -29,7 +29,7 @@ def get_weekly_theme():
     return {"英国文学史": "综合复习", "美国文学史": "综合复习",
             "基础英语": "综合训练", "政治": "综合考点", "法语": "综合语法"}
 
-def call_glm(messages, max_tokens=800):
+def call_glm(messages, max_tokens=800, timeout=30, retries=2):
     url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
     headers = {
         "Authorization": f"Bearer {GLM_API_KEY}",
@@ -41,11 +41,26 @@ def call_glm(messages, max_tokens=800):
         "temperature": 0.7,
         "max_tokens": max_tokens
     }
-    resp = requests.post(url, headers=headers, json=payload)
-    if resp.status_code == 200:
-        return resp.json()["choices"][0]["message"]["content"].strip()
-    else:
-        raise Exception(f"API调用失败: {resp.status_code} {resp.text}")
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"].strip()
+            else:
+                print(f"API返回错误状态码: {resp.status_code}, 内容: {resp.text}")
+                if attempt < retries:
+                    print(f"重试中... ({attempt+1}/{retries})")
+                    continue
+                else:
+                    raise Exception(f"API调用失败: {resp.status_code} {resp.text}")
+        except requests.exceptions.Timeout:
+            print(f"请求超时（{timeout}秒），正在重试... ({attempt+1}/{retries})")
+            if attempt == retries:
+                raise Exception("API调用多次超时，请稍后再试")
+        except requests.exceptions.RequestException as e:
+            print(f"网络错误: {e}")
+            if attempt == retries:
+                raise
 
 def generate_daily_plan(weekly_theme):
     today = datetime.now()
