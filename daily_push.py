@@ -3,7 +3,7 @@ from datetime import datetime
 import os
 import yaml
 
-DEEPSEEK_API_KEY = os.environ['DEEPSEEK_API_KEY']
+GLM_API_KEY = os.environ['GLM_API_KEY']
 WECHAT_SENDKEY = os.environ['WECHAT_SENDKEY']
 
 def load_plan():
@@ -15,7 +15,7 @@ def load_plan():
         return None
 
 def get_week_number():
-    start_date = datetime(2026, 8, 1)  # 如果开始日期不同，可改这里
+    start_date = datetime(2026, 8, 1)
     today = datetime.now()
     days_diff = (today - start_date).days
     return max(1, days_diff // 7 + 1)
@@ -29,7 +29,6 @@ def get_current_theme():
     for w in plan['weeks']:
         if w['id'] == week_no:
             return w
-    # 超期则采用最后一周循环
     last = plan['weeks'][-1]
     last['id'] = week_no
     return last
@@ -54,9 +53,14 @@ def generate_content():
 
     user_prompt = f"今天是{datetime.now().strftime('%Y年%m月%d日')}，星期{['一','二','三','四','五','六','日'][datetime.now().weekday()]}。本周主线：{main_lines}。请生成今日推送。"
 
-    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-    data = {
-        "model": "deepseek-chat",
+    # 智谱 API 调用（GLM-4-Flash 免费）
+    url = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "glm-4-flash",   # 免费模型
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -64,11 +68,11 @@ def generate_content():
         "temperature": 0.7,
         "max_tokens": 1600
     }
-    resp = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=data)
+    resp = requests.post(url, headers=headers, json=payload)
     if resp.status_code == 200:
         return resp.json()["choices"][0]["message"]["content"]
     else:
-        return f"生成失败：状态码{resp.status_code}"
+        return f"生成失败：状态码{resp.status_code}，错误信息：{resp.text}"
 
 def send_wechat(content):
     if not WECHAT_SENDKEY:
